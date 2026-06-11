@@ -296,6 +296,7 @@ async function saveState() {
   }
 }
 
+let firstLoad = true;
 function subscribe() {
   if(unsub) unsub();
   unsub = onSnapshot(STATE_REF, snap => {
@@ -307,6 +308,14 @@ function subscribe() {
         if(!S.rounds) S.rounds = [];
         if(!S.eliminated) S.eliminated = [];
       } catch(e) {}
+    }
+    // on first load check if goal scorer needed
+    if(firstLoad) {
+      firstLoad = false;
+      if(ME && !S.goalScorers[ME]) {
+        showGSSetup();
+        return;
+      }
     }
     renderAll();
   });
@@ -331,8 +340,8 @@ async function doLogin() {
   if(!sel) { alert('Please select your name.'); return; }
   ME = sel.dataset.p;
   localStorage.setItem('totd-wc-u', ME);
-  // load current state from Firebase to check if goal scorer already set
-  document.getElementById('v-login').innerHTML = '<div class="loading" style="padding:60px 20px"><div class="spin"></div>Loading...</div>';
+  document.getElementById('login-btn').textContent = 'Loading...';
+  document.getElementById('login-btn').disabled = true;
   try {
     const { getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
     const snap = await getDoc(STATE_REF);
@@ -342,8 +351,8 @@ async function doLogin() {
       if(!S.goalScorers) S.goalScorers = {};
     }
   } catch(e) {}
-  // rebuild login screen in case they sign out later
-  buildGrid();
+  document.getElementById('login-btn').textContent = 'Log in';
+  document.getElementById('login-btn').disabled = false;
   launchAfterLogin();
 }
 
@@ -358,6 +367,7 @@ function signOut() {
 }
 
 function showApp() {
+  firstLoad = true;
   document.getElementById('v-login').style.display = 'none';
   document.getElementById('v-gs').style.display = 'none';
   document.getElementById('v-app').style.display = 'block';
@@ -366,39 +376,34 @@ function showApp() {
   document.getElementById('nb-admin').style.display = ME===ADMIN ? 'flex' : 'none';
   document.getElementById('p-home').innerHTML = '<div class="loading"><div class="spin"></div>Loading live data...</div>';
   subscribe();
-  // if Firebase hasn't loaded after 8 seconds show a sign out option
   setTimeout(function(){
     const el = document.getElementById('p-home');
     if(el && el.innerHTML.includes('Loading live data')) {
-      el.innerHTML = '<div class="loading"><div class="spin"></div>Loading live data...<br><br><button onclick="signOut()" style="background:transparent;border:1px solid var(--brd2);color:var(--t2);border-radius:8px;padding:8px 16px;font-family:Barlow,sans-serif;font-size:13px;cursor:pointer;margin-top:8px">Taking too long? Sign out</button></div>';
+      el.innerHTML = '<div class="loading"><div class="spin"></div>Still loading...<br><br><button onclick="signOut()" style="background:transparent;border:1px solid var(--brd2);color:var(--t2);border-radius:8px;padding:8px 16px;font-family:Barlow,sans-serif;font-size:13px;cursor:pointer;margin-top:8px">Sign out and try again</button></div>';
     }
-  }, 8000);
+  }, 10000);
+}
+
+function launchAfterLogin() {
+  showApp();
 }
 
 function showGSSetup() {
-  document.getElementById('v-login').style.display = 'none';
   document.getElementById('v-app').style.display = 'none';
+  document.getElementById('v-login').style.display = 'none';
   document.getElementById('v-gs').style.display = 'block';
 }
 
 async function saveGS() {
   const val = document.getElementById('gs-inp').value.trim();
   if(!val) { alert('Please enter a player name.'); return; }
-  // load latest state first so we don't overwrite anything
   if(!S.goalScorers) S.goalScorers = {};
   S.goalScorers[ME] = val;
   await saveState();
-  showApp();
-}
-
-function launchAfterLogin() {
-  // called after login — check if goal scorer set in current state
-  if(!S.goalScorers) S.goalScorers = {};
-  if(!S.goalScorers[ME]) {
-    showGSSetup();
-  } else {
-    showApp();
-  }
+  firstLoad = false;
+  document.getElementById('v-gs').style.display = 'none';
+  document.getElementById('v-app').style.display = 'block';
+  renderAll();
 }
 
 // ── CALC ──────────────────────────────────────────
@@ -886,7 +891,6 @@ function go(id) {
 function openLb(src) { document.getElementById('lb-img').src=src; document.getElementById('lb').classList.add('on'); }
 function closeLb() { document.getElementById('lb').classList.remove('on'); }
 
-// expose to HTML onclick handlers
 window.go = go;
 window.openLb = openLb;
 window.closeLb = closeLb;
@@ -899,11 +903,6 @@ window.openRound = openRound;
 window.setRes = setRes;
 window.setOdds = setOdds;
 window.setGoals = setGoals;
-window.setBehalfTip = setBehalfTip;
-window.setBehalfMatch = setBehalfMatch;
-window.setBehalfMkt = setBehalfMkt;
-window.setBehalfOdds = setBehalfOdds;
-window.saveBehalfTips = saveBehalfTips;
 window.setGS = setGS;
 window.saveAllGS = saveAllGS;
 window.setPastRes = setPastRes;
@@ -914,7 +913,9 @@ window.resolveRound = resolveRound;
 window.applyElim = applyElim;
 window.resetAll = resetAll;
 window.renderEditRound = renderEditRound;
-
+window.saveGS = saveGS;
+window.doLogin = doLogin;
+window.signOut = signOut;
 window.saveGS = saveGS;
 window.doLogin = doLogin;
 window.signOut = signOut;
